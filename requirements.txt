@@ -1,6 +1,9 @@
 fastapi
 uvicorn
 langchain
+langchain-community
+langchain-core
+chromadb
 python-dotenv
 pydantic
 requests
