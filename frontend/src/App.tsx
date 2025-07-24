@@ -1,88 +1,110 @@
-import { useState } from "react";
-import axios from "axios";
+import { useState, useRef, useEffect } from 'react';
+import { 
+  Header, 
+  ChatInput, 
+  ChatMessage, 
+  ChatControls, 
+  ErrorState, 
+  LoadingDots 
+} from './components';
+import { useChat } from './hooks';
 
 function App() {
-  const [query, setQuery] = useState("");
-  const [response, setResponse] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { messages, loading, error, sendMessage, clearChat, exportChat } = useChat();
 
-  const handleAsk = async () => {
-    if (!query.trim()) return;
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || loading) return;
     
-    setLoading(true);
-    try {
-      const res = await axios.post("http://localhost:8000/ask", { query });
-      setResponse(res.data.response);
-    } catch (error) {
-      console.error("Error:", error);
-      setResponse("Something went wrong. Please make sure the backend server is running on http://localhost:8000");
-    } finally {
-      setLoading(false);
-    }
+    const message = inputValue;
+    setInputValue(''); // Clear input immediately for better UX
+    await sendMessage(message);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
-      handleAsk();
+  const handleClearChat = () => {
+    if (window.confirm('Are you sure you want to clear the conversation?')) {
+      clearChat();
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex flex-col items-center justify-center">
-      <div className="w-full max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">KTU AI Assistant</h1>
-          <p className="text-gray-600 text-lg">Ask anything about your syllabus, notes, rules, and academic guidelines</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      {/* Background decorations */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-200/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-200/20 rounded-full blur-3xl"></div>
+      </div>
 
-        {/* Main Interface */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="mb-4">
-            <label htmlFor="query" className="block text-sm font-medium text-gray-700 mb-2">
-              Your Question
-            </label>
-            <textarea
-              id="query"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
-              placeholder="Example: What are the requirements for CST306? What is the exam pattern for Algorithm Analysis?"
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
+          {/* Header */}
+          <Header messageCount={messages.length} />
+
+          {/* Chat Container */}
+          <div className="flex flex-col h-[calc(100vh-300px)] max-h-[600px]">
+            {/* Chat Controls */}
+            <ChatControls 
+              messages={messages}
+              onClearChat={handleClearChat}
+              onExportChat={exportChat}
             />
-            <p className="text-sm text-gray-500 mt-1">Press Ctrl+Enter to submit quickly</p>
-          </div>
-          
-          <button
-            onClick={handleAsk}
-            disabled={loading || !query.trim()}
-            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-200 font-medium"
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Processing...
-              </div>
-            ) : (
-              "Ask AI Assistant"
-            )}
-          </button>
-        </div>
 
-        {/* Response Area */}
-        {response && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Response:</h3>
-            <div className="prose max-w-none">
-              <p className="text-gray-700 whitespace-pre-line leading-relaxed">{response}</p>
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto space-y-6 mb-6 px-2">
+              {messages.length === 0 && !loading && (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 text-lg mb-4">
+                    👋 Welcome! I'm here to help you with KTU academic questions.
+                  </div>
+                  <div className="text-gray-500 text-sm">
+                    Try asking about syllabus topics, exam patterns, or academic guidelines.
+                  </div>
+                </div>
+              )}
+
+              {messages.map((message) => (
+                <ChatMessage key={message.id} message={message} />
+              ))}
+
+              {loading && <LoadingDots />}
+              
+              {error && (
+                <ErrorState 
+                  error={error} 
+                  onRetry={() => sendMessage(inputValue)}
+                />
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
+
+            {/* Input Area */}
+            <ChatInput
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleSendMessage}
+              loading={loading}
+            />
           </div>
-        )}
+        </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
-          <p>Powered by RAG (Retrieval-Augmented Generation) with your academic documents</p>
-        </div>
+        <footer className="text-center py-6 text-sm text-gray-500 border-t border-gray-200/50 bg-white/80 backdrop-blur-sm">
+          <div className="max-w-4xl mx-auto px-4">
+            <p className="mb-2">
+              🤖 Powered by RAG (Retrieval-Augmented Generation) with your academic documents
+            </p>
+            <p className="text-xs text-gray-400">
+              Built with React, TypeScript, and Tailwind CSS • Made for KTU Students
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );
